@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="com.oculus.permission.USE_SCENE" />
+    <uses-permission android:name="com.oculus.permission.USE_ANCHOR_API" />
+    <uses-permission android:name="com.oculus.permission.USE_PASSTHROUGH" />
+
+    <uses-feature android:name="android.hardware.vr.headtracking" android:required="true" />
+
+    <application>
+        <meta-data android:name="com.oculus.supportedDevices" android:value="quest3|quest3s" />
+        <meta-data android:name="com.oculus.ossplash.background" android:value="passthrough-contextual" />
+    </application>
+</manifest>
