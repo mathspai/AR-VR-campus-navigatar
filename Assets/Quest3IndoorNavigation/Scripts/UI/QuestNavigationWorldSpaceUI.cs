@@ -35,16 +35,18 @@ namespace Quest3IndoorNavigation.UI
         [SerializeField] private Font uiFont;
         [SerializeField] private Vector2 canvasSize = new(1040f, 940f);
         [SerializeField] private float canvasScale = 0.0015f;
-        [SerializeField] private bool followMainCamera = true;
+        [SerializeField] private bool followMainCamera = false;
         [SerializeField] private float followDistance = 1.5f;
-        [SerializeField] private float followHeightOffset = -0.08f;
-        [SerializeField] private float followLerpSpeed = 8f;
+        [SerializeField] private float followHeightOffset = -0.22f;
+        [SerializeField] private float followLerpSpeed = 25f;
+        [SerializeField] private float snapDistanceThreshold = 1.2f;
         [SerializeField] private float buttonHeight = 82f;
         [SerializeField] private float buttonSpacing = 18f;
         [SerializeField] private float panelPadding = 42f;
 
         [Header("Runtime Points")]
         [SerializeField] private string generatedPointPrefix = "Point";
+        [SerializeField] private Transform navigationPointsRoot;
         [SerializeField] private string[] floorIds = { "F1", "F2", "F3" };
 
         [Header("Colors")]
@@ -98,8 +100,16 @@ namespace Quest3IndoorNavigation.UI
 
         private void Awake()
         {
+            followMainCamera = false;
             ResolveReferences();
             Build();
+        }
+
+        private void Start()
+        {
+            followMainCamera = false;
+            DetachFromMovingParents();
+            SnapToCamera();
         }
 
         private void OnEnable()
@@ -115,10 +125,7 @@ namespace Quest3IndoorNavigation.UI
 
         private void LateUpdate()
         {
-            if (followMainCamera)
-            {
-                FollowCamera();
-            }
+            followMainCamera = false;
         }
 
         public void RefreshTargets()
@@ -203,7 +210,7 @@ namespace Quest3IndoorNavigation.UI
         {
             ResolveReferences();
 
-            var mainCamera = Camera.main;
+            var mainCamera = GetUserCamera();
             if (mainCamera == null || targetRegistry == null)
             {
                 return;
@@ -211,14 +218,20 @@ namespace Quest3IndoorNavigation.UI
 
             generatedPointCount = Mathf.Max(generatedPointCount + 1, GetValidTargetCount(targetRegistry.Targets) + 1);
             var pointName = $"{generatedPointPrefix} {generatedPointCount}";
+            var worldPosition = mainCamera.transform.position;
+            var worldRotation = Quaternion.identity;
+            var stableRoot = GetNavigationPointsRoot();
+
             var pointObject = new GameObject(pointName);
-            pointObject.transform.position = mainCamera.transform.position;
-            pointObject.transform.rotation = Quaternion.identity;
+            pointObject.transform.SetParent(stableRoot, true);
+            pointObject.transform.position = worldPosition;
+            pointObject.transform.rotation = worldRotation;
 
             var target = pointObject.AddComponent<NavigationTarget>();
             var metadata = pointObject.AddComponent<NavigationPointMetadata>();
             metadata.SetMetadata(CurrentFloorId, currentPointType);
             var marker = pointObject.AddComponent<NavigationPointMarker>();
+            marker.SetWorldLockPosition(worldPosition);
             marker.SetLabel($"{pointName}\n{CurrentFloorId} / {GetPointTypeLabel(currentPointType)}");
 
             targetRegistry.Register(target);
@@ -290,7 +303,7 @@ namespace Quest3IndoorNavigation.UI
         {
             canvas = GetComponent<Canvas>();
             canvas.renderMode = RenderMode.WorldSpace;
-            canvas.worldCamera = Camera.main;
+            canvas.worldCamera = GetUserCamera();
 
             var canvasRect = canvas.GetComponent<RectTransform>();
             canvasRect.sizeDelta = canvasSize;
@@ -605,6 +618,33 @@ namespace Quest3IndoorNavigation.UI
             navigationLine = navigationController != null ? navigationController.GetComponent<LineRenderer>() : null;
         }
 
+        private Transform GetNavigationPointsRoot()
+        {
+            if (navigationPointsRoot != null)
+            {
+                EnsureSceneRoot(navigationPointsRoot);
+                return navigationPointsRoot;
+            }
+
+            var existingRoot = GameObject.Find("NavigationPointsRoot");
+            if (existingRoot == null)
+            {
+                existingRoot = new GameObject("NavigationPointsRoot");
+            }
+
+            navigationPointsRoot = existingRoot.transform;
+            EnsureSceneRoot(navigationPointsRoot);
+            return navigationPointsRoot;
+        }
+
+        private static void EnsureSceneRoot(Transform root)
+        {
+            if (root != null && root.parent != null)
+            {
+                root.SetParent(null, true);
+            }
+        }
+
         private void EnsureRaycasters()
         {
             if (GetComponent<GraphicRaycaster>() == null)
@@ -760,9 +800,39 @@ namespace Quest3IndoorNavigation.UI
             }
         }
 
+        public void ToggleVisibility()
+        {
+            gameObject.SetActive(!gameObject.activeSelf);
+        }
+
+        public void Hide()
+        {
+            gameObject.SetActive(false);
+        }
+
+        public bool IsVisible => gameObject.activeSelf;
+
+        public void RepositionToCamera()
+        {
+            SnapToCamera();
+            DetachFromMovingParents();
+        }
+
+        private void SnapToCamera()
+        {
+            var mainCamera = GetUserCamera();
+            if (mainCamera == null) return;
+            var cameraTransform = mainCamera.transform;
+            var flatForward = Vector3.ProjectOnPlane(cameraTransform.forward, Vector3.up);
+            if (flatForward.sqrMagnitude < 0.001f) flatForward = cameraTransform.forward;
+            flatForward.Normalize();
+            transform.position = cameraTransform.position + flatForward * followDistance + Vector3.up * followHeightOffset;
+            transform.rotation = Quaternion.LookRotation(-flatForward, Vector3.up);
+        }
+
         private void FollowCamera()
         {
-            var mainCamera = Camera.main;
+            var mainCamera = GetUserCamera();
             if (mainCamera == null)
             {
                 return;
@@ -778,10 +848,26 @@ namespace Quest3IndoorNavigation.UI
             flatForward.Normalize();
             var targetPosition = cameraTransform.position + flatForward * followDistance + Vector3.up * followHeightOffset;
             var targetRotation = Quaternion.LookRotation(-flatForward, Vector3.up);
-            var lerp = 1f - Mathf.Exp(-followLerpSpeed * Time.deltaTime);
 
+            // Snap immediately when panel is too far off (e.g. first frame or teleport)
+            if (Vector3.Distance(transform.position, targetPosition) > snapDistanceThreshold)
+            {
+                transform.position = targetPosition;
+                transform.rotation = targetRotation;
+                return;
+            }
+
+            var lerp = 1f - Mathf.Exp(-followLerpSpeed * Time.deltaTime);
             transform.position = Vector3.Lerp(transform.position, targetPosition, lerp);
             transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, lerp);
+        }
+
+        private void DetachFromMovingParents()
+        {
+            if (transform.parent != null)
+            {
+                transform.SetParent(null, true);
+            }
         }
 
         private static void DestroyChild(GameObject child)
@@ -794,6 +880,20 @@ namespace Quest3IndoorNavigation.UI
             {
                 DestroyImmediate(child);
             }
+        }
+
+        private static Camera GetUserCamera()
+        {
+            var cameras = FindObjectsByType<Camera>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+            foreach (var candidate in cameras)
+            {
+                if (candidate != null && candidate.enabled && candidate.name == "CenterEyeAnchor")
+                {
+                    return candidate;
+                }
+            }
+
+            return Camera.main;
         }
 
         private Image CreateImage(string name, Transform parent, Color color)

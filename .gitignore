@@ -22,6 +22,8 @@ sysinfo.txt
 *.aab
 *.unitypackage
 *.app
+PackageDownloads/
+*.part
 
 # Crashlytics
 crashlytics-build.properties
@@ -46,3 +48,11 @@ ExportedObj/
 ehthumbs.db
 Thumbs.db
 desktop.ini
+
+# AI/session records
+.claude/
+.utmp/
+PROJECT_SYNC.md
+WORKLOG.md
+CLAUDE_HANDOFF_SPATIAL_ANCHOR_MVP.md
+.Rhistory

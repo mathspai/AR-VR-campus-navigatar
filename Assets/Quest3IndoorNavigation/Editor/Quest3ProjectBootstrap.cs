@@ -13,6 +13,8 @@ namespace Quest3IndoorNavigation.Editor
             EditorUserBuildSettings.SwitchActiveBuildTarget(BuildTargetGroup.Android, BuildTarget.Android);
 
             PlayerSettings.SetApplicationIdentifier(NamedBuildTarget.Android, "com.example.quest3indoornavigation");
+            PlayerSettings.bundleVersion = "0.18.0-ui";
+            PlayerSettings.Android.bundleVersionCode = 2026051318;
             PlayerSettings.SetScriptingBackend(NamedBuildTarget.Android, ScriptingImplementation.IL2CPP);
             PlayerSettings.Android.targetArchitectures = AndroidArchitecture.ARM64;
             PlayerSettings.Android.minSdkVersion = AndroidSdkVersions.AndroidApiLevel32;
@@ -113,12 +115,14 @@ namespace Quest3IndoorNavigation.Editor
             }
 
             var serializedObject = new SerializedObject(config);
+            SetInt(serializedObject, "handTrackingSupport", 2);
+            SetInt(serializedObject, "handTrackingFrequency", 0);
             SetBool(serializedObject, "anchorSupport", true);
             SetBool(serializedObject, "sceneSupport", true);
             SetBool(serializedObject, "insightPassthroughEnabled", true);
             SetBool(serializedObject, "_insightPassthroughSupport", true);
             SetBool(serializedObject, "isPassthroughCameraAccessEnabled", true);
-            SetBool(serializedObject, "boundaryVisibilitySupport", true);
+            SetInt(serializedObject, "boundaryVisibilitySupport", 1); // Supported: enables Boundary API so app can suppress it
             serializedObject.ApplyModifiedPropertiesWithoutUndo();
         }
 
@@ -128,6 +132,15 @@ namespace Quest3IndoorNavigation.Editor
             if (property != null)
             {
                 property.boolValue = value;
+            }
+        }
+
+        private static void SetInt(SerializedObject serializedObject, string propertyName, int value)
+        {
+            var property = serializedObject.FindProperty(propertyName);
+            if (property != null)
+            {
+                property.intValue = value;
             }
         }
     }

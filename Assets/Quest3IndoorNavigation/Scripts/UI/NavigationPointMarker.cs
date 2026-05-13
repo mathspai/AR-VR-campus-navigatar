@@ -10,21 +10,37 @@ namespace Quest3IndoorNavigation.UI
         [SerializeField] private float labelHeight = 0.18f;
         [SerializeField] private Color markerColor = new(0.18f, 0.82f, 0.62f, 1f);
         [SerializeField] private Color labelColor = Color.white;
+        [SerializeField] private bool lockWorldPosition = true;
 
         private TextMesh labelMesh;
+        private Vector3 lockedWorldPosition;
+        private bool hasLockedWorldPosition;
 
         private void Awake()
         {
+            LockCurrentWorldPosition();
             BuildMarker();
         }
 
         private void LateUpdate()
         {
+            if (lockWorldPosition && hasLockedWorldPosition)
+            {
+                transform.position = lockedWorldPosition;
+            }
+
             var mainCamera = Camera.main;
             if (mainCamera != null && labelMesh != null)
             {
                 labelMesh.transform.rotation = Quaternion.LookRotation(labelMesh.transform.position - mainCamera.transform.position);
             }
+        }
+
+        public void SetWorldLockPosition(Vector3 worldPosition)
+        {
+            lockedWorldPosition = worldPosition;
+            hasLockedWorldPosition = true;
+            transform.position = worldPosition;
         }
 
         public void SetLabel(string value)
@@ -35,6 +51,12 @@ namespace Quest3IndoorNavigation.UI
             {
                 labelMesh.text = label;
             }
+        }
+
+        private void LockCurrentWorldPosition()
+        {
+            lockedWorldPosition = transform.position;
+            hasLockedWorldPosition = true;
         }
 
         private void BuildMarker()
